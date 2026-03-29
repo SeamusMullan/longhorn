@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Longhorn
+Comment=A fast launcher with aero glass aesthetics
+Exec=longhorn
+Type=Application
+Categories=Utility;
+NoDisplay=true

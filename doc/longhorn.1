@@ -1,0 +1,63 @@
+.TH LONGHORN 1 "2026-03-29" "longhorn 0.1.0" "User Commands"
+.SH NAME
+longhorn \- a fast launcher with aero glass aesthetics
+.SH SYNOPSIS
+.B longhorn
+[\fB\-b\fR]
+[\fB\-l\fR \fIlines\fR]
+[\fB\-p\fR \fIprompt\fR]
+[\fB\-fn\fR \fIfont\fR]
+[\fB\-fs\fR \fIsize\fR]
+.SH DESCRIPTION
+.B longhorn
+reads newline\-delimited items from stdin and presents a graphical menu
+with a frosted glass aesthetic.
+The user can type to filter items and press Enter to select one.
+The selected item is printed to stdout.
+.PP
+If no item is selected (e.g. the user presses Escape),
+.B longhorn
+exits with status 1 and prints nothing.
+.SH OPTIONS
+.TP
+.B \-b
+Position the menu at the bottom of the screen instead of the top.
+.TP
+.BI \-l " lines"
+Number of vertical lines to display.
+A value of 0 (the default) uses a single horizontal line.
+.TP
+.BI \-p " prompt"
+Set the prompt string.
+The default prompt is
+.BR > .
+.TP
+.BI \-fn " font"
+Path to a TrueType font file to use for rendering.
+If not specified, a built\-in default is used.
+.TP
+.BI \-fs " size"
+Font size in points.
+The default is 16.
+.SH EXIT STATUS
+.TP
+.B 0
+An item was selected and printed to stdout.
+.TP
+.B 1
+No item was selected, or an error occurred.
+.SH EXAMPLES
+Launch a program from a list:
+.PP
+.nf
+echo \-e "firefox\enthunderbird\engimp" | longhorn
+.fi
+.PP
+Use with dmenu\-compatible scripts:
+.PP
+.nf
+dmenu_path | longhorn \-l 10 \-p "run:"
+.fi
+.SH SEE ALSO
+.BR dmenu (1),
+.BR rofi (1)

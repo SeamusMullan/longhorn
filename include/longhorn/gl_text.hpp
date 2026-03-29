@@ -3,8 +3,16 @@
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <string>
+#include <unordered_map>
+#include <cstddef>
 
 namespace longhorn {
+
+struct CachedTexture {
+    unsigned int texture_id = 0;
+    int width = 0;
+    int height = 0;
+};
 
 // Renders text using TTF -> SDL_Surface -> GL texture -> textured quad
 class GLText {
@@ -35,7 +43,13 @@ private:
     unsigned int rect_program_ = 0;
     unsigned int vao_ = 0;
     unsigned int vbo_ = 0;
-    unsigned int texture_ = 0;
+
+    // Text texture cache
+    std::unordered_map<std::size_t, CachedTexture> cache_;
+    static constexpr std::size_t MAX_CACHE_SIZE = 256;
+
+    std::size_t cache_key(const std::string& text, SDL_Color color);
+    void clear_cache();
 
     bool init_text_shader();
     bool init_rect_shader();
