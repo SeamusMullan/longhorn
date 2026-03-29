@@ -21,6 +21,8 @@ endif()
 # Options
 option(BUILD_TESTS "Build test suite" ON)
 option(USE_SYSTEM_SDL "Use system SDL3 instead of submodules" OFF)
+option(ENABLE_WAYLAND "Build Wayland layer-shell backend" ON)
+option(ENABLE_X11 "Build X11 override-redirect backend" ON)
 
 # --- OpenGL ---
 find_package(OpenGL REQUIRED)
@@ -73,6 +75,7 @@ endif()
 # --- Longhorn library ---
 add_library(longhorn_lib STATIC
     src/app.cpp
+    src/config_file.cpp
     src/renderer.cpp
     src/input.cpp
     src/filter.cpp
@@ -113,6 +116,8 @@ if(BUILD_TESTS)
         tests/main.cpp
         tests/test_filter.cpp
         tests/test_geometry.cpp
+        tests/test_config_file.cpp
+        tests/test_vertical.cpp
     )
     target_link_libraries(longhorn_tests PRIVATE longhorn_lib doctest::doctest)
     target_include_directories(longhorn_tests PRIVATE ${CMAKE_SOURCE_DIR}/submodules/doctest/doctest)

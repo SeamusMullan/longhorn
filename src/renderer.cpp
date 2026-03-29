@@ -27,7 +27,8 @@ std::string Renderer::find_font(const std::string& font_path) {
     throw std::runtime_error("No font found");
 }
 
-Renderer::Renderer(const Layout& layout, const std::string& font_path, int font_size) {
+Renderer::Renderer(const Layout& layout, const std::string& font_path, int font_size, int lines)
+    : lines_(lines) {
     if (!SDL_Init(SDL_INIT_VIDEO))
         throw std::runtime_error(std::string("SDL_Init: ") + SDL_GetError());
     if (!TTF_Init())
@@ -41,7 +42,7 @@ Renderer::Renderer(const Layout& layout, const std::string& font_path, int font_
     display_h_ = mode->h;
 
     // Resolve layout
-    bar_height_ = font_size * 2;
+    bar_height_ = (lines_ > 0) ? font_size * 2 * (lines_ + 1) : font_size * 2;
     PixelRect rect = layout.resolve(display_w_, display_h_, bar_height_);
     geometry_.current = rect;
     geometry_.target = rect;
@@ -105,6 +106,10 @@ void Renderer::set_layout(const Layout& layout) {
     glass_->set_corner_radius(layout.corner_radius);
 }
 
+void Renderer::set_tint(float r, float g, float b, float a) {
+    glass_->set_tint(r, g, b, a);
+}
+
 void Renderer::update_geometry(float dt) {
     geometry_.update(dt);
     auto rect = geometry_.interpolated();
@@ -116,6 +121,15 @@ void Renderer::draw_text_overlay(const RenderState& state) {
     auto rect = geometry_.interpolated();
     int vw = rect.w;
     int vh = rect.h;
+
+    if (lines_ > 0) {
+        draw_vertical_overlay(state, vw, vh);
+    } else {
+        draw_horizontal_overlay(state, vw, vh);
+    }
+}
+
+void Renderer::draw_horizontal_overlay(const RenderState& state, int vw, int vh) {
     int font_h = text_->font_height();
     int x = 8;
     int y = (vh - font_h) / 2;
@@ -145,6 +159,38 @@ void Renderer::draw_text_overlay(const RenderState& state) {
 
         text_->draw(item, x, y, selected ? SEL_COLOR : MATCH_COLOR, vw, vh);
         x += text_->measure(item) + 16;
+    }
+}
+
+void Renderer::draw_vertical_overlay(const RenderState& state, int vw, int vh) {
+    int font_h = text_->font_height();
+    int line_h = font_h * 2;
+    int x = 8;
+    int y = (line_h - font_h) / 2;
+
+    // First line: prompt + input
+    std::string prompt_str = state.prompt + " ";
+    text_->draw(prompt_str, x, y, PROMPT_COLOR, vw, vh);
+    int px = x + text_->measure(prompt_str);
+    text_->draw(state.input, px, y, TEXT_COLOR, vw, vh);
+
+    // Match lines
+    int visible = lines_;
+    int offset = state.scroll_offset;
+    int end = std::min(offset + visible, static_cast<int>(state.matches.size()));
+
+    for (int i = offset; i < end; ++i) {
+        int line_idx = i - offset + 1; // +1 for prompt line
+        int ly = line_idx * line_h + (line_h - font_h) / 2;
+        const auto& item = state.matches[i];
+        bool selected = (i == state.selected);
+
+        if (selected) {
+            int item_w = text_->measure(item);
+            text_->draw_rect(x - 4, ly - 2, item_w + 8, font_h + 4, SEL_BG_COLOR, vw, vh);
+        }
+
+        text_->draw(item, x, ly, selected ? SEL_COLOR : MATCH_COLOR, vw, vh);
     }
 }
 
