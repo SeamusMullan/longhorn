@@ -174,6 +174,8 @@ include(GNUInstallDirs)
 install(TARGETS longhorn DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY shaders/ DESTINATION ${CMAKE_INSTALL_DATADIR}/longhorn/shaders
     FILES_MATCHING PATTERN "*.glsl")
+install(FILES doc/longhorn.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
+install(FILES longhorn.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 
 # --- Tests ---
 if(BUILD_TESTS)
