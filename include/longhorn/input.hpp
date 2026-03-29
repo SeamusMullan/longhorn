@@ -18,11 +18,17 @@ enum class Action {
     MoveEnd,
     TextInput,
     Complete, // Tab completion
+    MouseClick,
+    MouseScroll,
 };
 
 struct InputEvent {
     Action action = Action::None;
     std::string text;
+    int mouse_x = 0;
+    int mouse_y = 0;
+    int scroll_delta = 0;
+    bool ctrl = false;
 };
 
 // Translate an SDL event into a longhorn action

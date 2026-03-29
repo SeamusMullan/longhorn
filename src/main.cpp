@@ -13,7 +13,8 @@ static void print_usage(const char* prog) {
               << "  -p prompt   prompt string (default: >)\n"
               << "  -fn font    path to TTF font\n"
               << "  -fs size    font size in points (default: 16)\n"
-              << "  -c config   path to INI config file\n";
+              << "  -c config   path to INI config file\n"
+              << "  -nh         disable selection history\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -48,6 +49,8 @@ int main(int argc, char* argv[]) {
             config.font_size = std::stoi(argv[++i]);
         } else if (std::strcmp(argv[i], "-c") == 0 && i + 1 < argc) {
             ++i; // already handled
+        } else if (std::strcmp(argv[i], "-nh") == 0) {
+            config.use_history = false;
         } else {
             print_usage(argv[0]);
             return 1;

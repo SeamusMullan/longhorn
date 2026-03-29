@@ -72,6 +72,58 @@ else()
     add_subdirectory(submodules/SDL_ttf)
 endif()
 
+# --- Platform backends ---
+set(PLATFORM_SOURCES src/platform.cpp)
+set(PLATFORM_LIBS "")
+
+if(ENABLE_WAYLAND)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(WAYLAND_CLIENT wayland-client)
+    endif()
+    find_program(WAYLAND_SCANNER wayland-scanner)
+
+    if(WAYLAND_CLIENT_FOUND AND WAYLAND_SCANNER)
+        message(STATUS "Wayland layer-shell backend: enabled")
+
+        set(WLR_PROTOCOL_XML ${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml)
+        set(WLR_CLIENT_HEADER ${CMAKE_BINARY_DIR}/generated/wlr-layer-shell-unstable-v1-client-protocol.h)
+        set(WLR_CLIENT_CODE ${CMAKE_BINARY_DIR}/generated/wlr-layer-shell-unstable-v1-protocol.c)
+        file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated)
+
+        add_custom_command(
+            OUTPUT ${WLR_CLIENT_HEADER}
+            COMMAND ${WAYLAND_SCANNER} client-header ${WLR_PROTOCOL_XML} ${WLR_CLIENT_HEADER}
+            DEPENDS ${WLR_PROTOCOL_XML}
+            COMMENT "Generating wlr-layer-shell client header"
+        )
+        add_custom_command(
+            OUTPUT ${WLR_CLIENT_CODE}
+            COMMAND ${WAYLAND_SCANNER} private-code ${WLR_PROTOCOL_XML} ${WLR_CLIENT_CODE}
+            DEPENDS ${WLR_PROTOCOL_XML}
+            COMMENT "Generating wlr-layer-shell protocol code"
+        )
+
+        list(APPEND PLATFORM_SOURCES src/platform_wayland.cpp ${WLR_CLIENT_CODE} ${WLR_CLIENT_HEADER})
+        list(APPEND PLATFORM_LIBS ${WAYLAND_CLIENT_LIBRARIES})
+        set(HAS_WAYLAND TRUE)
+    else()
+        message(STATUS "Wayland layer-shell backend: disabled (missing wayland-client or wayland-scanner)")
+    endif()
+endif()
+
+if(ENABLE_X11)
+    find_package(X11 QUIET)
+    if(X11_FOUND)
+        message(STATUS "X11 backend: enabled")
+        list(APPEND PLATFORM_SOURCES src/platform_x11.cpp)
+        list(APPEND PLATFORM_LIBS ${X11_LIBRARIES})
+        set(HAS_X11 TRUE)
+    else()
+        message(STATUS "X11 backend: disabled (X11 not found)")
+    endif()
+endif()
+
 # --- Longhorn library ---
 add_library(longhorn_lib STATIC
     src/app.cpp
@@ -83,12 +135,28 @@ add_library(longhorn_lib STATIC
     src/glass.cpp
     src/gl_funcs.cpp
     src/gl_text.cpp
+    ${PLATFORM_SOURCES}
     ${SHADER_C_FILES}
 )
 
 target_include_directories(longhorn_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/include
 )
+target_include_directories(longhorn_lib PRIVATE
+    ${CMAKE_BINARY_DIR}/generated
+)
+
+if(HAS_WAYLAND)
+    target_compile_definitions(longhorn_lib PUBLIC HAS_WAYLAND)
+    target_include_directories(longhorn_lib PRIVATE ${WAYLAND_CLIENT_INCLUDE_DIRS})
+endif()
+if(HAS_X11)
+    target_compile_definitions(longhorn_lib PUBLIC HAS_X11)
+    target_include_directories(longhorn_lib PRIVATE ${X11_INCLUDE_DIR})
+endif()
+if(PLATFORM_LIBS)
+    target_link_libraries(longhorn_lib PRIVATE ${PLATFORM_LIBS})
+endif()
 
 if(USE_SYSTEM_SDL)
     target_include_directories(longhorn_lib PUBLIC ${SDL3_INCLUDE_DIRS} ${SDL3_TTF_INCLUDE_DIRS})

@@ -37,4 +37,22 @@ std::vector<std::size_t> filter_items(
     return result;
 }
 
+std::vector<std::size_t> filter_items(
+    std::string_view input,
+    const std::vector<std::string>& items,
+    const std::function<int(const std::string&)>& scorer
+) {
+    auto result = filter_items(input, items);
+
+    std::sort(result.begin(), result.end(),
+        [&](std::size_t a, std::size_t b) {
+            int sa = scorer(items[a]);
+            int sb = scorer(items[b]);
+            if (sa != sb) return sa > sb;
+            return items[a] < items[b];
+        });
+
+    return result;
+}
+
 } // namespace longhorn

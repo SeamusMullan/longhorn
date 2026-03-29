@@ -31,12 +31,6 @@ void load_config(Config& config, const std::string& path) {
     if (ini.has("general", "lines"))
         config.lines = ini.get_int("general", "lines", config.lines);
 
-    // [history]
-    if (ini.has("history", "enabled"))
-        config.use_history = ini.get_bool("history", "enabled", config.use_history);
-    if (ini.has("history", "path"))
-        config.history_path = ini.get("history", "path");
-
     // [appearance]
     if (ini.has("appearance", "corner_radius"))
         config.corner_radius = ini.get_float("appearance", "corner_radius", config.corner_radius);
@@ -50,18 +44,6 @@ void load_config(Config& config, const std::string& path) {
         config.tint_a = ini.get_float("appearance", "tint_a", config.tint_a);
 }
 
-static std::string default_history_path() {
-    std::string base;
-    if (const char* cache = std::getenv("XDG_CACHE_HOME")) {
-        base = cache;
-    } else if (const char* home = std::getenv("HOME")) {
-        base = std::string(home) + "/.cache";
-    } else {
-        return {};
-    }
-    return base + "/longhorn/history";
-}
-
 struct App::Impl {
     Config config;
     std::vector<std::string> items;
@@ -72,7 +54,6 @@ struct App::Impl {
     int scroll_offset = 0;
     int cursor_pos = 0;
     std::vector<std::pair<int,int>> item_positions;
-    std::unique_ptr<History> history;
 
     void update_scroll() {
         int lines = config.lines;
@@ -83,12 +64,7 @@ struct App::Impl {
     }
 
     void update_filter() {
-        if (history) {
-            filtered_indices = filter_items(input, items,
-                [this](const std::string& item) { return history->score(item); });
-        } else {
-            filtered_indices = filter_items(input, items);
-        }
+        filtered_indices = filter_items(input, items);
         filtered_items.clear();
         filtered_items.reserve(filtered_indices.size());
         for (auto idx : filtered_indices) {
@@ -102,17 +78,6 @@ App::App(Config config, std::vector<std::string> items)
     : impl_(std::make_unique<Impl>()) {
     impl_->config = std::move(config);
     impl_->items = std::move(items);
-
-    if (impl_->config.use_history) {
-        std::string hpath = impl_->config.history_path.empty()
-                                ? default_history_path()
-                                : impl_->config.history_path;
-        if (!hpath.empty()) {
-            impl_->history = std::make_unique<History>(hpath);
-            impl_->history->load();
-        }
-    }
-
     impl_->update_filter();
 }
 
@@ -152,29 +117,23 @@ std::string App::run() {
                 case Action::Quit:
                     return {};
 
-                case Action::Confirm: {
-                    std::string result;
+                case Action::Confirm:
                     if (!impl_->filtered_items.empty()) {
-                        result = impl_->filtered_items[impl_->selected];
-                    } else {
-                        result = impl_->input;
+                        return impl_->filtered_items[impl_->selected];
                     }
-                    if (impl_->history && !result.empty()) {
-                        impl_->history->record(result);
-                        impl_->history->save();
-                    }
-                    return result;
-                }
+                    return impl_->input;
 
                 case Action::TextInput:
-                    impl_->input += input_event.text;
+                    impl_->input.insert(impl_->cursor_pos, input_event.text);
+                    impl_->cursor_pos += static_cast<int>(input_event.text.size());
                     impl_->selected = 0;
                     impl_->update_filter();
                     break;
 
                 case Action::DeleteChar:
-                    if (!impl_->input.empty()) {
-                        impl_->input.pop_back();
+                    if (impl_->cursor_pos > 0) {
+                        impl_->input.erase(impl_->cursor_pos - 1, 1);
+                        --impl_->cursor_pos;
                         impl_->selected = 0;
                         impl_->update_filter();
                     }
@@ -182,8 +141,9 @@ std::string App::run() {
 
                 case Action::DeleteWord: {
                     auto& inp = impl_->input;
-                    while (!inp.empty() && inp.back() == ' ') inp.pop_back();
-                    while (!inp.empty() && inp.back() != ' ') inp.pop_back();
+                    auto& cp = impl_->cursor_pos;
+                    while (cp > 0 && inp[cp - 1] == ' ') { inp.erase(cp - 1, 1); --cp; }
+                    while (cp > 0 && inp[cp - 1] != ' ') { inp.erase(cp - 1, 1); --cp; }
                     impl_->selected = 0;
                     impl_->update_filter();
                     break;
@@ -191,36 +151,74 @@ std::string App::run() {
 
                 case Action::ClearInput:
                     impl_->input.clear();
+                    impl_->cursor_pos = 0;
                     impl_->selected = 0;
                     impl_->update_filter();
                     break;
 
                 case Action::MoveLeft:
-                    if (impl_->selected > 0) --impl_->selected;
-                    impl_->update_scroll();
+                    if (input_event.ctrl || impl_->filtered_items.empty()) {
+                        if (impl_->cursor_pos > 0) --impl_->cursor_pos;
+                    } else {
+                        if (impl_->selected > 0) --impl_->selected;
+                        impl_->update_scroll();
+                    }
                     break;
 
                 case Action::MoveRight:
-                    if (impl_->selected < static_cast<int>(impl_->filtered_items.size()) - 1)
-                        ++impl_->selected;
-                    impl_->update_scroll();
+                    if (input_event.ctrl || impl_->filtered_items.empty()) {
+                        if (impl_->cursor_pos < static_cast<int>(impl_->input.size())) ++impl_->cursor_pos;
+                    } else {
+                        if (impl_->selected < static_cast<int>(impl_->filtered_items.size()) - 1)
+                            ++impl_->selected;
+                        impl_->update_scroll();
+                    }
                     break;
 
                 case Action::MoveHome:
-                    impl_->selected = 0;
-                    impl_->update_scroll();
+                    if (input_event.ctrl) {
+                        impl_->cursor_pos = 0;
+                    } else {
+                        impl_->selected = 0;
+                        impl_->update_scroll();
+                    }
                     break;
 
                 case Action::MoveEnd:
-                    impl_->selected = std::max(0, static_cast<int>(impl_->filtered_items.size()) - 1);
-                    impl_->update_scroll();
+                    if (input_event.ctrl) {
+                        impl_->cursor_pos = static_cast<int>(impl_->input.size());
+                    } else {
+                        impl_->selected = std::max(0, static_cast<int>(impl_->filtered_items.size()) - 1);
+                        impl_->update_scroll();
+                    }
                     break;
 
                 case Action::Complete:
                     if (!impl_->filtered_items.empty()) {
                         impl_->input = impl_->filtered_items[impl_->selected];
+                        impl_->cursor_pos = static_cast<int>(impl_->input.size());
                         impl_->update_filter();
                     }
+                    break;
+
+                case Action::MouseClick: {
+                    auto& positions = impl_->item_positions;
+                    int mx = input_event.mouse_x;
+                    for (std::size_t i = 0; i < positions.size(); ++i) {
+                        if (mx >= positions[i].first && mx <= positions[i].second) {
+                            impl_->selected = static_cast<int>(i);
+                            break;
+                        }
+                    }
+                    break;
+                }
+
+                case Action::MouseScroll:
+                    impl_->selected = std::clamp(
+                        impl_->selected - input_event.scroll_delta,
+                        0,
+                        std::max(0, static_cast<int>(impl_->filtered_items.size()) - 1));
+                    impl_->update_scroll();
                     break;
 
                 case Action::None:
@@ -230,6 +228,7 @@ std::string App::run() {
 
         renderer.update_geometry(dt);
 
+        impl_->item_positions.clear();
         RenderState state{
             .input = impl_->input,
             .matches = impl_->filtered_items,
@@ -237,6 +236,9 @@ std::string App::run() {
             .prompt = impl_->config.prompt,
             .lines = impl_->config.lines,
             .scroll_offset = impl_->scroll_offset,
+            .cursor_pos = impl_->cursor_pos,
+            .time = total_time,
+            .item_positions = &impl_->item_positions,
         };
         renderer.draw(state, total_time);
 

@@ -1,0 +1,6 @@
+#!/bin/sh
+# List all executables in PATH, like dmenu_path
+IFS=:
+for dir in $PATH; do
+    [ -d "$dir" ] && find "$dir" -maxdepth 1 -type f -executable -printf '%f\n' 2>/dev/null
+done
