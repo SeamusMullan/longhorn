@@ -1,6 +1,8 @@
 #include <longhorn/renderer.hpp>
 #include <longhorn/gl_funcs.hpp>
 #include <stdexcept>
+#include <cmath>
+#include <algorithm>
 
 namespace longhorn {
 
@@ -140,7 +142,14 @@ void Renderer::draw_horizontal_overlay(const RenderState& state, int vw, int vh)
     x += text_->measure(prompt_str);
 
     // Input
+    int input_start_x = x;
     text_->draw(state.input, x, y, TEXT_COLOR, vw, vh);
+
+    // Blinking cursor
+    if (std::sin(state.time * 6.0f) > 0.0f) {
+        int cursor_x = input_start_x + text_->measure(state.input.substr(0, state.cursor_pos));
+        text_->draw_rect(cursor_x, y, 2, font_h, TEXT_COLOR, vw, vh);
+    }
     x += text_->measure(state.input) + 16;
 
     // Separator
@@ -152,13 +161,20 @@ void Renderer::draw_horizontal_overlay(const RenderState& state, int vw, int vh)
         const auto& item = state.matches[i];
         bool selected = (static_cast<int>(i) == state.selected);
 
+        int item_w = text_->measure(item);
         if (selected) {
-            int item_w = text_->measure(item);
             text_->draw_rect(x - 4, y - 2, item_w + 8, font_h + 4, SEL_BG_COLOR, vw, vh);
         }
 
+        if (state.item_boxes) {
+            state.item_boxes->push_back({
+                static_cast<int>(i),
+                {x - 4, y - 2, item_w + 8, font_h + 4}
+            });
+        }
+
         text_->draw(item, x, y, selected ? SEL_COLOR : MATCH_COLOR, vw, vh);
-        x += text_->measure(item) + 16;
+        x += item_w + 16;
     }
 }
 
@@ -171,8 +187,15 @@ void Renderer::draw_vertical_overlay(const RenderState& state, int vw, int vh) {
     // First line: prompt + input
     std::string prompt_str = state.prompt + " ";
     text_->draw(prompt_str, x, y, PROMPT_COLOR, vw, vh);
-    int px = x + text_->measure(prompt_str);
-    text_->draw(state.input, px, y, TEXT_COLOR, vw, vh);
+    
+    int input_start_x = x + text_->measure(prompt_str);
+    text_->draw(state.input, input_start_x, y, TEXT_COLOR, vw, vh);
+
+    // Blinking cursor
+    if (std::sin(state.time * 6.0f) > 0.0f) {
+        int cursor_x = input_start_x + text_->measure(state.input.substr(0, state.cursor_pos));
+        text_->draw_rect(cursor_x, y, 2, font_h, TEXT_COLOR, vw, vh);
+    }
 
     // Match lines
     int visible = lines_;
@@ -185,9 +208,16 @@ void Renderer::draw_vertical_overlay(const RenderState& state, int vw, int vh) {
         const auto& item = state.matches[i];
         bool selected = (i == state.selected);
 
+        int item_w = text_->measure(item);
         if (selected) {
-            int item_w = text_->measure(item);
             text_->draw_rect(x - 4, ly - 2, item_w + 8, font_h + 4, SEL_BG_COLOR, vw, vh);
+        }
+
+        if (state.item_boxes) {
+            state.item_boxes->push_back({
+                i,
+                {x - 4, ly - 2, vw - x, font_h + 4} // Entire line width clickable
+            });
         }
 
         text_->draw(item, x, ly, selected ? SEL_COLOR : MATCH_COLOR, vw, vh);

@@ -12,6 +12,11 @@
 
 namespace longhorn {
 
+struct ItemHitbox {
+    int index;
+    PixelRect rect;
+};
+
 struct RenderState {
     std::string input;
     std::span<const std::string> matches;
@@ -21,7 +26,7 @@ struct RenderState {
     int scroll_offset = 0;  // first visible match index in vertical mode
     int cursor_pos = 0;
     float time = 0.0f;
-    std::vector<std::pair<int,int>>* item_positions = nullptr;
+    std::vector<ItemHitbox>* item_boxes = nullptr;
 };
 
 class Renderer {

@@ -53,7 +53,7 @@ struct App::Impl {
     int selected = 0;
     int scroll_offset = 0;
     int cursor_pos = 0;
-    std::vector<std::pair<int,int>> item_positions;
+    std::vector<ItemHitbox> item_boxes;
 
     void update_scroll() {
         int lines = config.lines;
@@ -202,11 +202,13 @@ std::string App::run() {
                     break;
 
                 case Action::MouseClick: {
-                    auto& positions = impl_->item_positions;
+                    auto& boxes = impl_->item_boxes;
                     int mx = input_event.mouse_x;
-                    for (std::size_t i = 0; i < positions.size(); ++i) {
-                        if (mx >= positions[i].first && mx <= positions[i].second) {
-                            impl_->selected = static_cast<int>(i);
+                    int my = input_event.mouse_y;
+                    for (const auto& box : boxes) {
+                        if (mx >= box.rect.x && mx <= box.rect.x + box.rect.w &&
+                            my >= box.rect.y && my <= box.rect.y + box.rect.h) {
+                            impl_->selected = box.index;
                             break;
                         }
                     }
@@ -228,7 +230,7 @@ std::string App::run() {
 
         renderer.update_geometry(dt);
 
-        impl_->item_positions.clear();
+        impl_->item_boxes.clear();
         RenderState state{
             .input = impl_->input,
             .matches = impl_->filtered_items,
@@ -238,7 +240,7 @@ std::string App::run() {
             .scroll_offset = impl_->scroll_offset,
             .cursor_pos = impl_->cursor_pos,
             .time = total_time,
-            .item_positions = &impl_->item_positions,
+            .item_boxes = &impl_->item_boxes,
         };
         renderer.draw(state, total_time);
 
