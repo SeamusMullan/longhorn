@@ -20,6 +20,8 @@ InputEvent translate_event(const SDL_Event& event) {
         }
         if (key == SDLK_LEFT) return {Action::MoveLeft, {}, 0, 0, 0, ctrl};
         if (key == SDLK_RIGHT) return {Action::MoveRight, {}, 0, 0, 0, ctrl};
+        if (key == SDLK_UP) return {Action::MoveUp, {}, 0, 0, 0, ctrl};
+        if (key == SDLK_DOWN) return {Action::MoveDown, {}, 0, 0, 0, ctrl};
         if (key == SDLK_HOME || (ctrl && key == SDLK_A)) return {Action::MoveHome, {}, 0, 0, 0, ctrl};
         if (key == SDLK_END || (ctrl && key == SDLK_E)) return {Action::MoveEnd, {}, 0, 0, 0, ctrl};
         if (ctrl && key == SDLK_U) return {Action::ClearInput, {}, 0, 0, 0, ctrl};

@@ -14,6 +14,8 @@ enum class Action {
     ClearInput,
     MoveLeft,
     MoveRight,
+    MoveUp,
+    MoveDown,
     MoveHome,
     MoveEnd,
     TextInput,

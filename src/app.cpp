@@ -157,7 +157,7 @@ std::string App::run() {
                     break;
 
                 case Action::MoveLeft:
-                    if (input_event.ctrl || impl_->filtered_items.empty()) {
+                    if (impl_->config.lines > 0 || input_event.ctrl || impl_->filtered_items.empty()) {
                         if (impl_->cursor_pos > 0) --impl_->cursor_pos;
                     } else {
                         if (impl_->selected > 0) --impl_->selected;
@@ -166,9 +166,24 @@ std::string App::run() {
                     break;
 
                 case Action::MoveRight:
-                    if (input_event.ctrl || impl_->filtered_items.empty()) {
+                    if (impl_->config.lines > 0 || input_event.ctrl || impl_->filtered_items.empty()) {
                         if (impl_->cursor_pos < static_cast<int>(impl_->input.size())) ++impl_->cursor_pos;
                     } else {
+                        if (impl_->selected < static_cast<int>(impl_->filtered_items.size()) - 1)
+                            ++impl_->selected;
+                        impl_->update_scroll();
+                    }
+                    break;
+
+                case Action::MoveUp:
+                    if (impl_->config.lines > 0) {
+                        if (impl_->selected > 0) --impl_->selected;
+                        impl_->update_scroll();
+                    }
+                    break;
+
+                case Action::MoveDown:
+                    if (impl_->config.lines > 0) {
                         if (impl_->selected < static_cast<int>(impl_->filtered_items.size()) - 1)
                             ++impl_->selected;
                         impl_->update_scroll();
