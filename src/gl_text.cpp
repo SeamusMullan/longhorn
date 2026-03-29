@@ -1,6 +1,9 @@
 #include <longhorn/gl_text.hpp>
 #include <longhorn/gl_funcs.hpp>
 
+#include <functional>
+#include <cstring>
+
 namespace longhorn {
 
 static const char* text_vert_src = R"(
@@ -83,12 +86,30 @@ static unsigned int link(unsigned int v, unsigned int f) {
 GLText::GLText() = default;
 
 GLText::~GLText() {
-    if (texture_) glDeleteTextures(1, &texture_);
+    clear_cache();
     if (vbo_) glDeleteBuffers(1, &vbo_);
     if (vao_) glDeleteVertexArrays(1, &vao_);
     if (text_program_) glDeleteProgram(text_program_);
     if (rect_program_) glDeleteProgram(rect_program_);
     if (font_) TTF_CloseFont(font_);
+}
+
+std::size_t GLText::cache_key(const std::string& text, SDL_Color color) {
+    std::size_t h = std::hash<std::string>{}(text);
+    h ^= std::hash<uint32_t>{}(
+        (static_cast<uint32_t>(color.r) << 24) |
+        (static_cast<uint32_t>(color.g) << 16) |
+        (static_cast<uint32_t>(color.b) << 8)  |
+        static_cast<uint32_t>(color.a)
+    ) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    return h;
+}
+
+void GLText::clear_cache() {
+    for (auto& [key, entry] : cache_) {
+        if (entry.texture_id) glDeleteTextures(1, &entry.texture_id);
+    }
+    cache_.clear();
 }
 
 bool GLText::init(const std::string& font_path, int font_size) {
@@ -111,14 +132,6 @@ bool GLText::init(const std::string& font_path, int font_size) {
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
                           reinterpret_cast<void*>(2 * sizeof(float)));
     glBindVertexArray(0);
-
-    // Reusable texture
-    glGenTextures(1, &texture_);
-    glBindTexture(GL_TEXTURE_2D, texture_);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     return true;
 }
@@ -147,23 +160,45 @@ void GLText::draw(const std::string& text, int x, int y, SDL_Color color,
                   int viewport_w, int viewport_h) {
     if (text.empty()) return;
 
-    // Render text to surface
-    SDL_Surface* surface = TTF_RenderText_Blended(font_, text.c_str(), text.size(),
-                                                   {255, 255, 255, 255});
-    if (!surface) return;
+    std::size_t key = cache_key(text, color);
+    int tw, th;
+    unsigned int tex_id;
 
-    // Convert to RGBA if needed
-    SDL_Surface* rgba = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
-    SDL_DestroySurface(surface);
-    if (!rgba) return;
+    auto it = cache_.find(key);
+    if (it != cache_.end()) {
+        // Cache hit
+        tex_id = it->second.texture_id;
+        tw = it->second.width;
+        th = it->second.height;
+    } else {
+        // Cache miss — render and upload
+        SDL_Surface* surface = TTF_RenderText_Blended(font_, text.c_str(), text.size(),
+                                                       {255, 255, 255, 255});
+        if (!surface) return;
 
-    int tw = rgba->w;
-    int th = rgba->h;
+        SDL_Surface* rgba = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+        SDL_DestroySurface(surface);
+        if (!rgba) return;
 
-    // Upload to texture
-    glBindTexture(GL_TEXTURE_2D, texture_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
-    SDL_DestroySurface(rgba);
+        tw = rgba->w;
+        th = rgba->h;
+
+        // Evict all if full
+        if (cache_.size() >= MAX_CACHE_SIZE) {
+            clear_cache();
+        }
+
+        glGenTextures(1, &tex_id);
+        glBindTexture(GL_TEXTURE_2D, tex_id);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
+        SDL_DestroySurface(rgba);
+
+        cache_[key] = {tex_id, tw, th};
+    }
 
     // Quad vertices: pos(x,y) + uv(u,v)
     float x0 = static_cast<float>(x);
@@ -192,7 +227,7 @@ void GLText::draw(const std::string& text, int x, int y, SDL_Color color,
     glUniform1i(glGetUniformLocation(text_program_, "u_texture"), 0);
 
     if (glActiveTexture_) glActiveTexture_(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture_);
+    glBindTexture(GL_TEXTURE_2D, tex_id);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
