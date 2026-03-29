@@ -231,11 +231,13 @@ std::string App::run() {
                 }
 
                 case Action::MouseScroll:
-                    impl_->selected = std::clamp(
-                        impl_->selected - input_event.scroll_delta,
-                        0,
-                        std::max(0, static_cast<int>(impl_->filtered_items.size()) - 1));
-                    impl_->update_scroll();
+                    if (impl_->config.lines > 0) {
+                        impl_->selected = std::clamp(
+                            impl_->selected - input_event.scroll_delta,
+                            0,
+                            std::max(0, static_cast<int>(impl_->filtered_items.size()) - 1));
+                        impl_->update_scroll();
+                    }
                     break;
 
                 case Action::None:

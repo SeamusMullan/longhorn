@@ -36,7 +36,10 @@ InputEvent translate_event(const SDL_Event& event) {
     }
 
     if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-        return {Action::MouseScroll, {}, 0, 0, static_cast<int>(event.wheel.y), false};
+        int delta = 0;
+        if (event.wheel.y > 0.0f) delta = 1;
+        else if (event.wheel.y < 0.0f) delta = -1;
+        return {Action::MouseScroll, {}, 0, 0, delta, false};
     }
 
     return {Action::None, {}};
